@@ -2268,6 +2268,36 @@ class GemmaAdapter(BaseModelAdapter):
         return get_conv_template("gemma")
 
 
+class GPT2PrefixAdapter(BaseModelAdapter):
+    """The model adapter for Gemma"""
+
+    def match(self, model_path: str):
+        return "openai-community/gpt2" in model_path.lower()
+
+    def load_model(self, model_path: str, from_pretrained_kwargs: dict):
+        from transformers import AutoTokenizer, AutoModelForCausalLM
+        from peft import get_peft_model, TaskType, PeftType, PrefixTuningConfig
+
+        prefix_length = 10
+        adapter_name = 'random_adapter'
+
+        tokenizer = AutoTokenizer.from_pretrained(model_path)
+        model = AutoModelForCausalLM.from_pretrained(model_path)
+
+        peft_config = PrefixTuningConfig(peft_type=PeftType.PREFIX_TUNING, task_type=TaskType.CAUSAL_LM,
+                                         inference_mode=False, num_virtual_tokens=prefix_length,
+                                         prefix_projection=False)
+        model = get_peft_model(model, peft_config)
+
+        print(f'evaluate active peft adapter: {model.active_adapter}')
+        model.eval()
+
+        return model, tokenizer
+
+    def get_default_conv_template(self, model_path: str) -> Conversation:
+        return get_conv_template("raw")
+
+
 # Note: the registration order matters.
 # The one registered earlier has a higher matching priority.
 register_model_adapter(PeftModelAdapter)
@@ -2358,6 +2388,7 @@ register_model_adapter(SteerLMAdapter)
 register_model_adapter(LlavaAdapter)
 register_model_adapter(YuanAdapter)
 register_model_adapter(GemmaAdapter)
+register_model_adapter(GPT2PrefixAdapter)
 
 # After all adapters, try the default base adapter.
 register_model_adapter(BaseModelAdapter)
